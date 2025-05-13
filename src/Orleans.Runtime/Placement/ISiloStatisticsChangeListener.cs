@@ -1,6 +1,6 @@
 ﻿namespace Orleans.Runtime
 {
-    public interface ISiloStatisticsChangeListener
+    internal interface ISiloStatisticsChangeListener
     {
         /// <summary>
         /// Receive notification when new statistics data arrives.
