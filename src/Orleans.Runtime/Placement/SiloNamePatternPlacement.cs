@@ -9,6 +9,7 @@ using Orleans.Placement;
 using Orleans.Runtime;
 using Orleans.Runtime.Placement;
 using Orleans.Statistics;
+using Microsoft.Extensions.Logging;
 
 namespace Orleans.Runtime.Placement
 {
@@ -149,6 +150,7 @@ namespace Orleans.Runtime.Placement
         private readonly GrainPropertiesResolver _grainPropertiesResolver;
         private readonly Dictionary<SiloAddress, SiloRuntimeStatistics> _siloStatistics = 
             new Dictionary<SiloAddress, SiloRuntimeStatistics>();
+        private readonly ILogger<SiloNamePatternPlacementDirector> _logger;
         
         // Resource-related constants for score computation
         private const float CpuWeight = 0.4f;
@@ -161,13 +163,16 @@ namespace Orleans.Runtime.Placement
         /// <param name="siloStatusOracle">The silo status oracle.</param>
         /// <param name="grainPropertiesResolver">The grain properties resolver.</param>
         /// <param name="deploymentLoadPublisher">The deployment load publisher.</param>
+        /// <param name="logger">The logger.</param>
         public SiloNamePatternPlacementDirector(
             ISiloStatusOracle siloStatusOracle,
             GrainPropertiesResolver grainPropertiesResolver,
-            DeploymentLoadPublisher deploymentLoadPublisher) 
+            DeploymentLoadPublisher deploymentLoadPublisher,
+            ILogger<SiloNamePatternPlacementDirector> logger) 
         {
             _siloStatusOracle = siloStatusOracle ?? throw new ArgumentNullException(nameof(siloStatusOracle));
             _grainPropertiesResolver = grainPropertiesResolver ?? throw new ArgumentNullException(nameof(grainPropertiesResolver));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             
             // Subscribe to silo statistics events
             deploymentLoadPublisher?.SubscribeToStatisticsChangeEvents(this);
@@ -224,23 +229,26 @@ namespace Orleans.Runtime.Placement
         /// <returns>The selected silo address.</returns>
         private SiloAddress SelectOptimalSiloByResources(List<SiloAddress> matchingSilos, float maxCpuUsage, float maxMemoryUsage)
         {
+            var stopwatch = Stopwatch.StartNew();
+            int candidateCount = matchingSilos.Count;
             // If no statistics available or only one silo, use random selection
-            if (_siloStatistics.Count == 0 || matchingSilos.Count == 1)
+            if (_siloStatistics.Count == 0 || candidateCount == 1)
             {
-                return matchingSilos[Random.Shared.Next(matchingSilos.Count)];
+                var result = matchingSilos[Random.Shared.Next(candidateCount)];
+                stopwatch.Stop();
+                _logger.LogInformation("[SelectOptimalSiloByResources] Insufficient statistics or only one candidate, returning directly. Total elapsed: {Elapsed}ms, Candidates: {Candidates}, Selected: {Selected}", stopwatch.Elapsed.TotalMilliseconds, candidateCount, result);
+                return result;
             }
-            
-            // Filter out overloaded silos or silos exceeding resource thresholds
+            // 1st for-loop: 过滤有效silo
             var validSilos = new List<(SiloAddress Address, ResourceStatistics Stats)>();
             int maxActivationCount = 0;
             float maxMaxAvailableMemory = 0;
-            
+            var filterLoopWatch = Stopwatch.StartNew();
             foreach (var siloAddress in matchingSilos)
             {
                 if (_siloStatistics.TryGetValue(siloAddress, out var stats))
                 {
                     var resourceStats = ResourceStatistics.FromRuntime(stats);
-                    
                     // Skip overloaded silos or those exceeding thresholds
                     if (resourceStats.IsOverloaded || 
                         resourceStats.CpuUsage > maxCpuUsage || 
@@ -249,51 +257,56 @@ namespace Orleans.Runtime.Placement
                     {
                         continue;
                     }
-                    
                     validSilos.Add((siloAddress, resourceStats));
-                    
                     // Track max values for normalization
                     if (resourceStats.MaxAvailableMemory > maxMaxAvailableMemory)
                     {
                         maxMaxAvailableMemory = resourceStats.MaxAvailableMemory;
                     }
-                    
                     if (resourceStats.ActivationCount > maxActivationCount)
                     {
                         maxActivationCount = resourceStats.ActivationCount;
                     }
                 }
             }
-            
+            filterLoopWatch.Stop();
+            int validCount = validSilos.Count;
             // If no valid silos after filtering, fall back to all matching silos
-            if (validSilos.Count == 0)
+            if (validCount == 0)
             {
-                return matchingSilos[Random.Shared.Next(matchingSilos.Count)];
+                stopwatch.Stop();
+                _logger.LogWarning("[SelectOptimalSiloByResources] No valid silos after filtering, returning random. Total elapsed: {Elapsed}ms, Candidates: {Candidates}", stopwatch.Elapsed.TotalMilliseconds, candidateCount);
+                return matchingSilos[Random.Shared.Next(candidateCount)];
             }
-            
             // If only one valid silo, return it
-            if (validSilos.Count == 1)
+            if (validCount == 1)
             {
+                stopwatch.Stop();
+                _logger.LogInformation("[SelectOptimalSiloByResources] Only one valid silo, returning directly. Total elapsed: {Elapsed}ms, Candidates: {Candidates}, Valids: {Valids}, Selected: {Selected}", stopwatch.Elapsed.TotalMilliseconds, candidateCount, validCount, validSilos[0].Address);
                 return validSilos[0].Address;
             }
-            
-            // Calculate scores and find the best silo
-            // Lower score is better (less resource usage)
+            var scoreLoopWatch = Stopwatch.StartNew();
             (SiloAddress Address, float Score) bestSilo = (validSilos[0].Address, float.MaxValue);
-            
             foreach (var (address, stats) in validSilos)
             {
                 float score = CalculateScore(in stats, maxMaxAvailableMemory, maxActivationCount);
-                
                 // Add small random jitter to avoid always picking the same silo when scores are equal
                 float jitter = Random.Shared.NextSingle() / 100_000f;
-                
                 if (score + jitter < bestSilo.Score)
                 {
                     bestSilo = (address, score + jitter);
                 }
             }
-            
+            scoreLoopWatch.Stop();
+            stopwatch.Stop();
+            _logger.LogInformation(
+                "[SelectOptimalSiloByResources] Selection complete. Total elapsed: {TotalElapsed}ms, Filter loop: {FilterElapsed}ms, Score loop: {ScoreElapsed}ms, Candidates: {Candidates}, Valids: {Valids}, Best: {Best}",
+                stopwatch.Elapsed.TotalMilliseconds,
+                filterLoopWatch.Elapsed.TotalMilliseconds,
+                scoreLoopWatch.Elapsed.TotalMilliseconds,
+                candidateCount,
+                validCount,
+                bestSilo.Address);
             return bestSilo.Address;
         }
         
