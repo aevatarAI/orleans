@@ -52,14 +52,14 @@ namespace Orleans.Runtime.Placement
         /// Silos with CPU usage above this threshold will be excluded.
         /// </summary>
         [Id(1)]
-        public float MaxCpuUsage { get; private set; } = 80f; // Default to 80%
+        public float MaxCpuUsage { get; private set; } = 60f; // Default to 60%
 
         /// <summary>
         /// Gets or sets the maximum memory usage threshold in percentage (0-100).
         /// Silos with memory usage above this threshold will be excluded.
         /// </summary>
         [Id(2)]
-        public float MaxMemoryUsage { get; private set; } = 80f; // Default to 80%
+        public float MaxMemoryUsage { get; private set; } = 60f; // Default to 60%
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SiloNamePatternPlacement"/> class.
@@ -72,13 +72,13 @@ namespace Orleans.Runtime.Placement
         /// Creates a new instance of the <see cref="SiloNamePatternPlacement"/> class with the specified silo name pattern.
         /// </summary>
         /// <param name="siloNamePattern">The pattern to match against silo names. Grain will be activated on a silo whose name begins with this pattern.</param>
-        /// <param name="maxCpuUsage">The maximum CPU usage threshold (0-100%). Default is 80%.</param>
-        /// <param name="maxMemoryUsage">The maximum memory usage threshold (0-100%). Default is 80%.</param>
+        /// <param name="maxCpuUsage">The maximum CPU usage threshold (0-100%). Default is 60%.</param>
+        /// <param name="maxMemoryUsage">The maximum memory usage threshold (0-100%). Default is 60%.</param>
         /// <returns>A new instance of <see cref="SiloNamePatternPlacement"/> with the specified parameters.</returns>
         public static SiloNamePatternPlacement Create(
             string siloNamePattern, 
-            float maxCpuUsage = 80f, 
-            float maxMemoryUsage = 80f)
+            float maxCpuUsage = 60f, 
+            float maxMemoryUsage = 60f)
         {
             var instance = new SiloNamePatternPlacement
             {
@@ -153,9 +153,9 @@ namespace Orleans.Runtime.Placement
         private readonly ILogger<SiloNamePatternPlacementDirector> _logger;
         
         // Resource-related constants for score computation
-        private const float CpuWeight = 0.4f;
-        private const float MemoryWeight = 0.4f;
-        private const float ActivationCountWeight = 0.2f;
+        private const float CpuWeight = 0.6f;
+        private const float MemoryWeight = 0.1f;
+        private const float ActivationCountWeight = 0.3f;
         
         /// <summary>
         /// Initializes a new instance of the <see cref="SiloNamePatternPlacementDirector"/> class.
@@ -357,8 +357,8 @@ namespace Orleans.Runtime.Placement
         {
             // Get pattern from grain properties
             string siloNamePattern = null;
-            float maxCpuUsage = 80f;
-            float maxMemoryUsage = 80f;
+            float maxCpuUsage = 60f;
+            float maxMemoryUsage = 60f;
             
             if (_grainPropertiesResolver.TryGetGrainProperties(target.GrainIdentity.Type, out var properties))
             {
@@ -450,8 +450,8 @@ namespace Orleans.Runtime.Placement
             : base(SiloNamePatternPlacement.Create(siloNamePattern))
         {
             SiloNamePattern = siloNamePattern ?? throw new ArgumentNullException(nameof(siloNamePattern));
-            MaxCpuUsage = 80f; // Default
-            MaxMemoryUsage = 80f; // Default
+            MaxCpuUsage = 60f; // Default
+            MaxMemoryUsage = 60f; // Default
         }
 
         /// <summary>
