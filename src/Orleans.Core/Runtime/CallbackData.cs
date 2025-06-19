@@ -63,7 +63,7 @@ namespace Orleans.Runtime
             this.shared.Unregister(this.Message);
 
             this.stopwatch.Stop();
-            ApplicationRequestInstruments.OnAppRequestsEnd((long)this.stopwatch.Elapsed.TotalMilliseconds);
+            ApplicationRequestInstruments.OnAppRequestsEnd((long)this.stopwatch.Elapsed.TotalMilliseconds, new { Message = this.Message, Request = (this.Message.BodyObject as IInvokable) });
             ApplicationRequestInstruments.OnAppRequestsTimedOut();
 
             OrleansCallBackDataEvent.Log.OnTimeout(this.Message);
@@ -92,7 +92,7 @@ namespace Orleans.Runtime
 
             this.shared.Unregister(this.Message);
             this.stopwatch.Stop();
-            ApplicationRequestInstruments.OnAppRequestsEnd((long)this.stopwatch.Elapsed.TotalMilliseconds);
+            ApplicationRequestInstruments.OnAppRequestsEnd((long)this.stopwatch.Elapsed.TotalMilliseconds, new { Message = this.Message, Request = (this.Message.BodyObject as IInvokable) });
 
             OrleansCallBackDataEvent.Log.OnTargetSiloFail(this.Message);
             var msg = this.Message;
@@ -117,7 +117,7 @@ namespace Orleans.Runtime
             OrleansCallBackDataEvent.Log.DoCallback(this.Message);
 
             this.stopwatch.Stop();
-            ApplicationRequestInstruments.OnAppRequestsEnd((long)this.stopwatch.Elapsed.TotalMilliseconds);
+            ApplicationRequestInstruments.OnAppRequestsEnd((long)this.stopwatch.Elapsed.TotalMilliseconds, new { Message = this.Message, Request = (this.Message.BodyObject as IInvokable) });
 
             // do callback outside the CallbackData lock. Just not a good practice to hold a lock for this unrelated operation.
             ResponseCallback(response, this.context);

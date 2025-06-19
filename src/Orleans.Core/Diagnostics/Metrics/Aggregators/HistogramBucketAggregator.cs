@@ -9,7 +9,7 @@ namespace Orleans.Runtime;
 internal class HistogramBucketAggregator
 {
     private long _value = 0;
-    private readonly KeyValuePair<string, object>[] _tags;
+    private KeyValuePair<string, object>[] _tags;
     public long Bound { get; }
 
     public HistogramBucketAggregator(KeyValuePair<string, object>[] tags, long bound, KeyValuePair<string, object> label)
@@ -22,7 +22,20 @@ internal class HistogramBucketAggregator
 
     public long Value => _value;
 
-    public void Add(long measurement) => Interlocked.Add(ref _value, measurement);
+    public void Add(long measurement, KeyValuePair<string, object>[] tags)
+    {
+        Interlocked.Add(ref _value, measurement);
+        if (tags != null)
+        {
+            // Ensure 'duration' is always present
+            var hasDuration = tags.Any(kv => kv.Key.ToString() == "duration");
+            if (!hasDuration && _tags.Any(kv => kv.Key.ToString() == "duration"))
+            {
+                tags = tags.Concat(_tags.Where(kv => kv.Key.ToString() == "duration")).ToArray();
+            }
+            _tags = tags;
+        }
+    }
 
     public Measurement<long> Collect()
     {
