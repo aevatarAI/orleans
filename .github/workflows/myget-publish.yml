@@ -16,6 +16,7 @@ jobs:
       matrix:
         servicename: [
           Orleans.Runtime,
+          Orleans.Core,
         ]
     steps:
       - name: Checkout code
